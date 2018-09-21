@@ -1,31 +1,16 @@
-/**
- * Copyright Google Inc. All Rights Reserved.
- * <p/>
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.google.firebase.udacity.friendlychat;
 
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.design.widget.FloatingActionButton;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.text.Editable;
-import android.text.InputFilter;
-import android.text.TextWatcher;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.widget.Button;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
@@ -39,36 +24,38 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.udacity.friendlychat.adapter.MessageAdapter;
-import com.google.firebase.udacity.friendlychat.adapter.item.FriendlyMessageItem;
-import com.google.firebase.udacity.friendlychat.model.FriendlyMessage;
+import com.google.firebase.udacity.friendlychat.adapter.ChatsAdapter;
+import com.google.firebase.udacity.friendlychat.adapter.item.ChatRoomItem;
+import com.google.firebase.udacity.friendlychat.model.ChatRoom;
 import com.google.firebase.udacity.friendlychat.model.User;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+import utils.Keys;
 
-    private static final String TAG = "MainActivity";
+public class ChatsActivity extends AppCompatActivity {
+
+    private static final String TAG = "ChatsActivity";
 
     public static final String ANONYMOUS = "anonymous";
-    public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
 
     public static final int RC_SIGN_IN = 1;
 
-    private ListView mMessageListView;
-    private MessageAdapter mMessageAdapter;
+    private ChatsAdapter mChatsAdapter;
+
+    private ListView mChatsListView;
     private ProgressBar mProgressBar;
-    private EditText mMessageEditText;
-    private Button mSendButton;
+
+    private FloatingActionButton mFloatingActionButton;
 
     private String mUsername;
     private String mUserUid;
 
     // Firebase instance variables
     private FirebaseDatabase mFirebaseDatabase;
-    private DatabaseReference mMessagesDatabaseReference;
+    private DatabaseReference mChatsDatabaseReference;
     private ChildEventListener mChildEventListener;
     private FirebaseAuth mFirebaseAuth;
     private FirebaseAuth.AuthStateListener mAuthStateListener;
@@ -76,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_chats);
 
         mUsername = ANONYMOUS;
 
@@ -84,51 +71,31 @@ public class MainActivity extends AppCompatActivity {
         mFirebaseDatabase = FirebaseDatabase.getInstance();
         mFirebaseAuth = FirebaseAuth.getInstance();
 
-        mMessagesDatabaseReference = mFirebaseDatabase.getReference().child("messages");
+        mChatsDatabaseReference = mFirebaseDatabase.getReference().child("chats");
 
         // Initialize references to views
         mProgressBar = findViewById(R.id.progressBar);
-        mMessageListView = findViewById(R.id.messageListView);
-
-        mMessageEditText = findViewById(R.id.messageEditText);
-        mSendButton = findViewById(R.id.sendButton);
+        mChatsListView = findViewById(R.id.chatsListView);
+        mFloatingActionButton = findViewById(R.id.fab);
 
         // Initialize message ListView and its adapter
-        List<FriendlyMessageItem> items = new ArrayList<>();
-        mMessageAdapter = new MessageAdapter(this, R.layout.item_message, items);
-        mMessageListView.setAdapter(mMessageAdapter);
+        List<ChatRoomItem> items = new ArrayList<>();
+        mChatsAdapter = new ChatsAdapter(this, R.layout.item_chat, items);
+        mChatsListView.setAdapter(mChatsAdapter);
+        mChatsListView.setOnItemClickListener((adapterView, view, i, l) -> {
+            Intent intent = new Intent(ChatsActivity.this, MainActivity.class);
+
+            ChatRoomItem item = mChatsAdapter.getItem(i);
+            intent.putExtra(Keys.EXTRA_CHAT_ROOM_UID, item.getUid());
+            intent.putExtra(Keys.EXTRA_CHAT_ROOM_NAME, item.getChatRoom().getName());
+            startActivity(intent);
+        });
 
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
 
-        // Enable Send button when there's text to send
-        mMessageEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-                if (charSequence.toString().trim().length() > 0) {
-                    mSendButton.setEnabled(true);
-                } else {
-                    mSendButton.setEnabled(false);
-                }
-            }
-
-            @Override
-            public void afterTextChanged(Editable editable) {
-            }
-        });
-        mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(DEFAULT_MSG_LENGTH_LIMIT)});
-
-        // Send button sends a message and clears the EditText
-        mSendButton.setOnClickListener(view -> {
-            FriendlyMessage friendlyMessage = new FriendlyMessage(mMessageEditText.getText().toString(), mUsername, mUserUid);
-            mMessagesDatabaseReference.push().setValue(friendlyMessage);
-
-            // Clear input box
-            mMessageEditText.setText("");
+        mFloatingActionButton.setOnClickListener(view -> {
+            showInputDialog();
         });
 
         mAuthStateListener = firebaseAuth -> {
@@ -167,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -182,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
             mFirebaseAuth.removeAuthStateListener(mAuthStateListener);
         }
 
-        mMessageAdapter.clear();
+        mChatsAdapter.clear();
         detachDatabaseReadListener();
     }
 
@@ -220,18 +186,19 @@ public class MainActivity extends AppCompatActivity {
         mUserUid = ANONYMOUS;
         mUsername = ANONYMOUS;
 
-        mMessageAdapter.clear();
+        mChatsAdapter.clear();
         detachDatabaseReadListener();
     }
+
 
     private void attachDatabaseReadListener() {
         if (mChildEventListener == null) {
             mChildEventListener = new ChildEventListener() {
                 @Override
                 public void onChildAdded(@NonNull DataSnapshot dataSnapshot, String s) {
-                    FriendlyMessage friendlyMessage = dataSnapshot.getValue(FriendlyMessage.class);
-                    FriendlyMessageItem item = new FriendlyMessageItem(friendlyMessage, friendlyMessage.getUserUid().equals(mUserUid));
-                    mMessageAdapter.add(item);
+                    ChatRoom chatRoom = dataSnapshot.getValue(ChatRoom.class);
+                    ChatRoomItem item = new ChatRoomItem(dataSnapshot.getKey(), chatRoom);
+                    mChatsAdapter.add(item);
                 }
 
                 public void onChildChanged(@NonNull DataSnapshot dataSnapshot, String s) {
@@ -247,15 +214,36 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
-            mMessagesDatabaseReference.addChildEventListener(mChildEventListener);
+            mChatsDatabaseReference.addChildEventListener(mChildEventListener);
         }
     }
 
     private void detachDatabaseReadListener() {
         if (mChildEventListener != null) {
-            mMessagesDatabaseReference.removeEventListener(mChildEventListener);
+            mChatsDatabaseReference.removeEventListener(mChildEventListener);
 
             mChildEventListener = null;
         }
     }
+
+    private void showInputDialog() {
+        View viewInflated = LayoutInflater.from(this).inflate(R.layout.dialog_input,
+                findViewById(R.id.activity_chats_content), false);
+
+        final EditText input = viewInflated.findViewById(R.id.input);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Title")
+                .setView(viewInflated)
+                .setPositiveButton(android.R.string.ok, (dialog, wich) -> {
+                    dialog.dismiss();
+
+                    ChatRoom chatRoom = new ChatRoom(input.getText().toString());
+                    mChatsDatabaseReference.push().setValue(chatRoom);
+                })
+                .setNegativeButton(android.R.string.cancel, (dialog, wich) -> dialog.cancel())
+                .show();
+    }
+
+
 }
