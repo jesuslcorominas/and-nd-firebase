@@ -56,7 +56,9 @@ public class ChatsActivity extends AppCompatActivity {
     // Firebase instance variables
     private FirebaseDatabase mFirebaseDatabase;
     private DatabaseReference mChatsDatabaseReference;
-    private ChildEventListener mChildEventListener;
+
+    private ChildEventListener mChatsEventListener;
+
     private FirebaseAuth mFirebaseAuth;
     private FirebaseAuth.AuthStateListener mAuthStateListener;
 
@@ -192,8 +194,8 @@ public class ChatsActivity extends AppCompatActivity {
 
 
     private void attachDatabaseReadListener() {
-        if (mChildEventListener == null) {
-            mChildEventListener = new ChildEventListener() {
+        if (mChatsEventListener == null) {
+            mChatsEventListener = new ChildEventListener() {
                 @Override
                 public void onChildAdded(@NonNull DataSnapshot dataSnapshot, String s) {
                     ChatRoom chatRoom = dataSnapshot.getValue(ChatRoom.class);
@@ -214,15 +216,15 @@ public class ChatsActivity extends AppCompatActivity {
                 }
             };
 
-            mChatsDatabaseReference.addChildEventListener(mChildEventListener);
+            mChatsDatabaseReference.addChildEventListener(mChatsEventListener);
         }
     }
 
     private void detachDatabaseReadListener() {
-        if (mChildEventListener != null) {
-            mChatsDatabaseReference.removeEventListener(mChildEventListener);
+        if (mChatsEventListener != null) {
+            mChatsDatabaseReference.removeEventListener(mChatsEventListener);
 
-            mChildEventListener = null;
+            mChatsEventListener = null;
         }
     }
 
