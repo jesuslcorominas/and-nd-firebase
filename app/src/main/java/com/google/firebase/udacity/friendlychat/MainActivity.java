@@ -19,6 +19,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -27,6 +28,7 @@ import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
@@ -43,6 +45,8 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.udacity.friendlychat.adapter.MessageAdapter;
 import com.google.firebase.udacity.friendlychat.adapter.item.FriendlyMessageItem;
 import com.google.firebase.udacity.friendlychat.model.FriendlyMessage;
@@ -91,6 +95,10 @@ public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth mFirebaseAuth;
     private FirebaseAuth.AuthStateListener mAuthStateListener;
+
+    String dataTitle;
+    String dataMessage;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -194,7 +202,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -233,10 +240,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onSignedInInitialize(FirebaseUser firebaseUser) {
-        User user = new User(firebaseUser.getDisplayName(), firebaseUser.getEmail());
+        FirebaseInstanceId.getInstance().getInstanceId().addOnSuccessListener(instanceIdResult -> {
+            String deviceToken = instanceIdResult.getToken();
 
-        mFirebaseDatabase.getReference("users").child(firebaseUser.getUid()).setValue(user);
-        mMembersDatabaseReference.child(firebaseUser.getUid()).setValue(true);
+            User user = new User(firebaseUser.getDisplayName(), firebaseUser.getEmail(), new HashMap<>());
+            user.getDevices().put(deviceToken, true);
+
+            mFirebaseDatabase.getReference("users").child(firebaseUser.getUid()).setValue(user);
+
+            mMembersDatabaseReference.child(firebaseUser.getUid()).setValue(true);
+        });
 
         mUserUid = firebaseUser.getUid();
         mUsername = firebaseUser.getDisplayName();
@@ -258,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onChildAdded(@NonNull DataSnapshot dataSnapshot, String s) {
                     FriendlyMessage friendlyMessage = dataSnapshot.getValue(FriendlyMessage.class);
-                    FriendlyMessageItem item = new FriendlyMessageItem(friendlyMessage, friendlyMessage.getUserUid().equals(mUserUid));
+                    FriendlyMessageItem item = new FriendlyMessageItem(friendlyMessage, !friendlyMessage.getUserUid().equals(mUserUid));
                     mMessageAdapter.add(item);
                 }
 

@@ -24,6 +24,7 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.iid.FirebaseInstanceId;
 import com.google.firebase.udacity.friendlychat.adapter.ChatsAdapter;
 import com.google.firebase.udacity.friendlychat.adapter.item.ChatRoomItem;
 import com.google.firebase.udacity.friendlychat.model.ChatRoom;
@@ -31,6 +32,7 @@ import com.google.firebase.udacity.friendlychat.model.User;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 import utils.Keys;
@@ -174,9 +176,14 @@ public class ChatsActivity extends AppCompatActivity {
     }
 
     private void onSignedInInitialize(FirebaseUser firebaseUser) {
-        User user = new User(firebaseUser.getDisplayName(), firebaseUser.getEmail());
+        FirebaseInstanceId.getInstance().getInstanceId().addOnSuccessListener(instanceIdResult -> {
+            String deviceToken = instanceIdResult.getToken();
 
-        mFirebaseDatabase.getReference("users").child(firebaseUser.getUid()).setValue(user);
+            User user = new User(firebaseUser.getDisplayName(), firebaseUser.getEmail(), new HashMap<>());
+            user.getDevices().put(deviceToken, true);
+
+            mFirebaseDatabase.getReference("users").child(firebaseUser.getUid()).setValue(user);
+        });
 
         mUserUid = firebaseUser.getUid();
         mUsername = firebaseUser.getDisplayName();
