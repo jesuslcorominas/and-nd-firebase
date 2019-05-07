@@ -19,7 +19,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -28,7 +27,6 @@ import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
@@ -46,9 +44,9 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.udacity.friendlychat.adapter.MessageAdapter;
 import com.google.firebase.udacity.friendlychat.adapter.item.FriendlyMessageItem;
+import com.google.firebase.udacity.friendlychat.model.ChatRoom;
 import com.google.firebase.udacity.friendlychat.model.FriendlyMessage;
 import com.google.firebase.udacity.friendlychat.model.User;
 
@@ -81,7 +79,6 @@ public class MainActivity extends AppCompatActivity {
     private String mUsername;
     private String mUserUid;
 
-    private String mChatRoomName;
     private String mChatRoomUid;
 
     // Firebase instance variables
@@ -105,12 +102,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mChatRoomName = getIntent().getExtras().getString(Keys.EXTRA_CHAT_ROOM_NAME);
         mChatRoomUid = getIntent().getExtras().getString(Keys.EXTRA_CHAT_ROOM_UID);
-
-        setTitle(mChatRoomName);
-
-        mUsername = ANONYMOUS;
 
         // Initialize Firebase components
         mFirebaseDatabase = FirebaseDatabase.getInstance();
@@ -119,14 +111,12 @@ public class MainActivity extends AppCompatActivity {
         mMessagesDatabaseReference = mFirebaseDatabase.getReference().child("messages").child(mChatRoomUid);
         mMembersDatabaseReference = mFirebaseDatabase.getReference().child("members").child(mChatRoomUid);
 
+        mUsername = ANONYMOUS;
+
+        setTitleFromChatUid(mChatRoomUid);
+
         // Initialize references to views
-        mProgressBar = findViewById(R.id.progressBar);
-        mMessageListView = findViewById(R.id.messageListView);
-
-        mMessageEditText = findViewById(R.id.messageEditText);
-        mSendButton = findViewById(R.id.sendButton);
-
-        textViewMembers = findViewById(R.id.membersTextView);
+        initView();
 
         // Initialize message ListView and its adapter
         List<FriendlyMessageItem> items = new ArrayList<>();
@@ -365,5 +355,35 @@ public class MainActivity extends AppCompatActivity {
 
             mMembersEventListener = null;
         }
+    }
+
+    private void setTitleFromChatUid(String chatUid) {
+        mFirebaseDatabase
+                .getReference("chats")
+                .child(chatUid)
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                        ChatRoom chatRoom = dataSnapshot.getValue(ChatRoom.class);
+                        if (chatRoom != null) {
+                            setTitle(chatRoom.getName());
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError databaseError) {
+                        System.out.println("The read failed: " + databaseError.getCode());
+                    }
+                });
+    }
+
+    private void initView() {
+        mProgressBar = findViewById(R.id.progressBar);
+        mMessageListView = findViewById(R.id.messageListView);
+
+        mMessageEditText = findViewById(R.id.messageEditText);
+        mSendButton = findViewById(R.id.sendButton);
+
+        textViewMembers = findViewById(R.id.membersTextView);
     }
 }

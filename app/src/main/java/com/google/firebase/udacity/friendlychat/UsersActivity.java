@@ -4,14 +4,11 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.view.LayoutInflater;
+import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
@@ -25,8 +22,8 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.udacity.friendlychat.adapter.ChatsAdapter;
-import com.google.firebase.udacity.friendlychat.adapter.item.ChatRoomItem;
+import com.google.firebase.udacity.friendlychat.adapter.UsersAdapter;
+import com.google.firebase.udacity.friendlychat.adapter.item.UserItem;
 import com.google.firebase.udacity.friendlychat.model.ChatRoom;
 import com.google.firebase.udacity.friendlychat.model.User;
 
@@ -34,10 +31,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import utils.Keys;
 
-public class ChatsActivity extends AppCompatActivity {
+public class UsersActivity extends AppCompatActivity {
 
     private static final String TAG = "ChatsActivity";
 
@@ -45,9 +43,9 @@ public class ChatsActivity extends AppCompatActivity {
 
     public static final int RC_SIGN_IN = 1;
 
-    private ChatsAdapter mChatsAdapter;
+    private UsersAdapter mUsersAdapter;
 
-    private ListView mChatsListView;
+    private ListView mUsersListView;
     private ProgressBar mProgressBar;
 
     private FloatingActionButton mFloatingActionButton;
@@ -57,9 +55,9 @@ public class ChatsActivity extends AppCompatActivity {
 
     // Firebase instance variables
     private FirebaseDatabase mFirebaseDatabase;
-    private DatabaseReference mChatsDatabaseReference;
+    private DatabaseReference mUsersDatabaseReference;
 
-    private ChildEventListener mChatsEventListener;
+    private ChildEventListener mUsersEventListener;
 
     private FirebaseAuth mFirebaseAuth;
     private FirebaseAuth.AuthStateListener mAuthStateListener;
@@ -67,7 +65,7 @@ public class ChatsActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chats);
+        setContentView(R.layout.activity_users);
 
         mUsername = ANONYMOUS;
 
@@ -75,31 +73,39 @@ public class ChatsActivity extends AppCompatActivity {
         mFirebaseDatabase = FirebaseDatabase.getInstance();
         mFirebaseAuth = FirebaseAuth.getInstance();
 
-        mChatsDatabaseReference = mFirebaseDatabase.getReference().child("chats");
+        mUsersDatabaseReference = mFirebaseDatabase.getReference().child("users");
 
         // Initialize references to views
         mProgressBar = findViewById(R.id.progressBar);
-        mChatsListView = findViewById(R.id.chatsListView);
-        mFloatingActionButton = findViewById(R.id.fab);
+        mUsersListView = findViewById(R.id.usersListView);
 
         // Initialize message ListView and its adapter
-        List<ChatRoomItem> items = new ArrayList<>();
-        mChatsAdapter = new ChatsAdapter(this, R.layout.item_chat, items);
-        mChatsListView.setAdapter(mChatsAdapter);
-        mChatsListView.setOnItemClickListener((adapterView, view, i, l) -> {
-            Intent intent = new Intent(ChatsActivity.this, MainActivity.class);
+        List<UserItem> items = new ArrayList<>();
+        mUsersAdapter = new UsersAdapter(this, R.layout.item_user, items);
+        mUsersListView.setAdapter(mUsersAdapter);
+        mUsersListView.setOnItemClickListener((adapterView, view, i, l) -> {
+            final UserItem item = (UserItem) mUsersListView.getAdapter().getItem(i);
+            ChatRoom chatRoom = new ChatRoom(mUserUid, item.getUser().getName());
+            mFirebaseDatabase.getReference().child("chats").push().setValue(chatRoom, ((databaseError, databaseReference) -> {
+                String uniqueKey = databaseReference.getKey();
+                if (TextUtils.isEmpty(uniqueKey)) {
+                    return;
+                }
 
-            ChatRoomItem item = mChatsAdapter.getItem(i);
-            intent.putExtra(Keys.EXTRA_CHAT_ROOM_UID, item.getUid());
-            startActivity(intent);
+                Map<String, Boolean> members = new HashMap<>();
+                members.put(mUserUid, true);
+                members.put(item.getUid(), true);
+
+                mFirebaseDatabase.getReference().child("members").child(uniqueKey).setValue(members);
+
+                Intent intent = new Intent(UsersActivity.this, MainActivity.class);
+                intent.putExtra(Keys.EXTRA_CHAT_ROOM_UID, uniqueKey);
+                startActivity(intent);
+            }));
         });
 
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
-
-        mFloatingActionButton.setOnClickListener(view -> {
-            showInputDialog();
-        });
 
         mAuthStateListener = firebaseAuth -> {
             FirebaseUser user = firebaseAuth.getCurrentUser();
@@ -152,7 +158,7 @@ public class ChatsActivity extends AppCompatActivity {
             mFirebaseAuth.removeAuthStateListener(mAuthStateListener);
         }
 
-        mChatsAdapter.clear();
+        mUsersAdapter.clear();
         detachDatabaseReadListener();
     }
 
@@ -195,19 +201,21 @@ public class ChatsActivity extends AppCompatActivity {
         mUserUid = ANONYMOUS;
         mUsername = ANONYMOUS;
 
-        mChatsAdapter.clear();
+        mUsersAdapter.clear();
         detachDatabaseReadListener();
     }
 
 
     private void attachDatabaseReadListener() {
-        if (mChatsEventListener == null) {
-            mChatsEventListener = new ChildEventListener() {
+        if (mUsersEventListener == null) {
+            mUsersEventListener = new ChildEventListener() {
                 @Override
                 public void onChildAdded(@NonNull DataSnapshot dataSnapshot, String s) {
-                    ChatRoom chatRoom = dataSnapshot.getValue(ChatRoom.class);
-                    ChatRoomItem item = new ChatRoomItem(dataSnapshot.getKey(), chatRoom);
-                    mChatsAdapter.add(item);
+                    if (!dataSnapshot.getKey().equals(mUserUid)) {
+                        User user = dataSnapshot.getValue(User.class);
+                        UserItem item = new UserItem(dataSnapshot.getKey(), user);
+                        mUsersAdapter.add(item);
+                    }
                 }
 
                 public void onChildChanged(@NonNull DataSnapshot dataSnapshot, String s) {
@@ -223,36 +231,15 @@ public class ChatsActivity extends AppCompatActivity {
                 }
             };
 
-            mChatsDatabaseReference.addChildEventListener(mChatsEventListener);
+            mUsersDatabaseReference.addChildEventListener(mUsersEventListener);
         }
     }
 
     private void detachDatabaseReadListener() {
-        if (mChatsEventListener != null) {
-            mChatsDatabaseReference.removeEventListener(mChatsEventListener);
+        if (mUsersEventListener != null) {
+            mUsersDatabaseReference.removeEventListener(mUsersEventListener);
 
-            mChatsEventListener = null;
+            mUsersEventListener = null;
         }
     }
-
-    private void showInputDialog() {
-        View viewInflated = LayoutInflater.from(this).inflate(R.layout.dialog_input,
-                findViewById(R.id.activity_chats_content), false);
-
-        final EditText input = viewInflated.findViewById(R.id.input);
-
-        new AlertDialog.Builder(this)
-                .setTitle("Title")
-                .setView(viewInflated)
-                .setPositiveButton(android.R.string.ok, (dialog, wich) -> {
-                    dialog.dismiss();
-
-                    ChatRoom chatRoom = new ChatRoom(mUserUid, input.getText().toString());
-                    mChatsDatabaseReference.push().setValue(chatRoom);
-                })
-                .setNegativeButton(android.R.string.cancel, (dialog, wich) -> dialog.cancel())
-                .show();
-    }
-
-
 }
